@@ -9,6 +9,7 @@
 #include <aws/core/auth/AWSCredentialsProvider.h>
 #include <aws/s3/S3Client.h>
 #include <aws/s3/model/Bucket.h>
+#include <aws/s3/model/GetObjectRequest.h>
 #include <aws/s3/model/ListObjectsV2Request.h>
 #include <aws/s3/model/PutObjectRequest.h>
 #include <aws/s3/model/Object.h>
@@ -21,8 +22,11 @@ public:
 	string secretKey;
 	string action;
 	string bucket_name;
-	string prefix;
+   string prefix;
+   string remote_dir;
+   string remote_key;
 	string localfile_name;
+   string localdir_name;
 };
 
 class S3Test {
@@ -192,6 +196,39 @@ protected:
 		}
 	}
 
+   void upload(TestArgs testArgs) {
+      cout << "Uploading " << testArgs.localfile_name << " to bucket " << testArgs.bucket_name << " dir " << testArgs.remote_dir << endl;
+
+   }
+
+   void download(TestArgs testArgs) {
+      cout << "Downloading " << testArgs.remote_key << " from bucket " << testArgs.bucket_name << " to " << testArgs.localdir_name << endl;
+
+      Aws::S3::Model::GetObjectRequest object_request;
+      object_request.WithBucket(testArgs.bucket_name).WithKey(testArgs.remote_key);
+
+      auto get_object_outcome = s3_client->GetObject(object_request);
+
+      if(get_object_outcome.IsSuccess()) {
+         Aws::OFStream local_file;
+         string localFilename = testArgs.localdir_name + "\\";
+         size_t idx = testArgs.remote_key.find_last_of('/');
+         if(Aws::String::npos == idx) {
+            localFilename += testArgs.remote_key;
+         } else {
+            localFilename += testArgs.remote_key.substr(1+idx);
+         }
+         local_file.open(localFilename.c_str(), std::ios::out | std::ios::binary);
+         local_file << get_object_outcome.GetResult().GetBody().rdbuf();
+         std::cout << "Done downloading to " << localFilename << std::endl;
+      } else {
+         std::cout << "GetObject error: " <<
+            get_object_outcome.GetError().GetExceptionName() << " " <<
+            get_object_outcome.GetError().GetMessage() << std::endl;
+      }
+
+   }
+
 public:
 	void dotest(TestArgs testArgs) {
 		startup();
@@ -202,6 +239,9 @@ public:
       } else if("populate" == testArgs.action) {
          populateBucket(testArgs);
       } else if("upload" == testArgs.action) {
+         upload(testArgs);
+      } else if("download" == testArgs.action) {
+         download(testArgs);
 		} else {
 			cout << "Unrecognized action: " << testArgs.action << endl;
 		}
@@ -212,7 +252,10 @@ public:
 
 void usage()
 {
-	printf("Usage: s3vc2017 -key AWSkey -secret AWSsecret -action {list | populate} -bucket bucketName\n");
+   printf("Usage: s3vc2017 -accesskey accessKey -secret AWSsecret\n");
+   printf("  -action {list | populate | download | upload}\n");
+   printf("  -bucket bucketName [-localfile localFilename] [-remotedir keyName]\n");
+   printf("  [-localdir localDirName] [-remotekey remoteKeyName]\n");
 }
 
 int main(int argc, const char *argv[])
@@ -225,7 +268,7 @@ int main(int argc, const char *argv[])
 		} else if (0 == strcmp("-bucket", argv[iarg])) {
 			iarg++;
 			testArgs.bucket_name = argv[iarg];
-		} else if (0 == strcmp("-key", argv[iarg])) {
+		} else if (0 == strcmp("-accesskey", argv[iarg])) {
 			iarg++;
 			testArgs.accessKeyId = argv[iarg];
 		} else if (0 == strcmp("-secret", argv[iarg])) {
@@ -234,10 +277,20 @@ int main(int argc, const char *argv[])
 		} else if(0==strcmp("-prefix", argv[iarg])) {
 			iarg++;
 			testArgs.prefix = argv[iarg];
-		} else if(0==strcmp("-localfile", argv[iarg])) {
-			iarg++;
-			testArgs.localfile_name = argv[iarg];
+      } else if(0==strcmp("-localfile", argv[iarg])) {
+         iarg++;
+         testArgs.localfile_name = argv[iarg];
+      } else if(0==strcmp("-localdir", argv[iarg])) {
+         iarg++;
+         testArgs.localdir_name = argv[iarg];
+      } else if(0==strcmp("-remotedir", argv[iarg])) {
+         iarg++;
+         testArgs.remote_dir = argv[iarg];
+      } else if(0==strcmp("-remotekey", argv[iarg])) {
+         iarg++;
+         testArgs.remote_key = argv[iarg];
 		} else {
+         cout << "Unrecognized argument: " << argv[iarg] << endl;
 			usage();
 			return 1;
 		}
