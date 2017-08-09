@@ -199,8 +199,9 @@ public:
 		if ("list" == testArgs.action) {
 			listBuckets();
 			listFiles(testArgs);
-		} else if ("populate" == testArgs.action) {
-			populateBucket(testArgs);
+      } else if("populate" == testArgs.action) {
+         populateBucket(testArgs);
+      } else if("upload" == testArgs.action) {
 		} else {
 			cout << "Unrecognized action: " << testArgs.action << endl;
 		}
