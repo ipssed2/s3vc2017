@@ -9,6 +9,7 @@
 #include <aws/core/auth/AWSCredentialsProvider.h>
 #include <aws/s3/S3Client.h>
 #include <aws/s3/model/Bucket.h>
+#include <aws/s3/model/DeleteObjectRequest.h>
 #include <aws/s3/model/GetObjectRequest.h>
 #include <aws/s3/model/ListObjectsV2Request.h>
 #include <aws/s3/model/PutObjectRequest.h>
@@ -226,7 +227,23 @@ protected:
             get_object_outcome.GetError().GetExceptionName() << " " <<
             get_object_outcome.GetError().GetMessage() << std::endl;
       }
+   }
 
+   void deleteKey(TestArgs testArgs) {
+      Aws::S3::Model::DeleteObjectRequest object_request;
+      object_request.WithBucket(testArgs.bucket_name).WithKey(testArgs.remote_key);
+
+      auto delete_object_outcome = s3_client->DeleteObject(object_request);
+
+      if(delete_object_outcome.IsSuccess()) {
+         // Unfortunately, IsSuccess() is true even if the key did not exist.
+         // See https://stackoverflow.com/questions/30697746/why-does-s3-deleteobject-not-fail-when-the-specified-key-doesnt-exist.
+         std::cout << "Deleted " << testArgs.remote_key << " OK." << std::endl;
+      } else {
+         std::cout << "DeleteObject error: " <<
+            delete_object_outcome.GetError().GetExceptionName() << " " <<
+            delete_object_outcome.GetError().GetMessage() << std::endl;
+      }
    }
 
 public:
@@ -242,6 +259,8 @@ public:
          upload(testArgs);
       } else if("download" == testArgs.action) {
          download(testArgs);
+      } else if("deletekey" == testArgs.action) {
+         deleteKey(testArgs);
 		} else {
 			cout << "Unrecognized action: " << testArgs.action << endl;
 		}
@@ -253,7 +272,7 @@ public:
 void usage()
 {
    printf("Usage: s3vc2017 -accesskey accessKey -secret AWSsecret\n");
-   printf("  -action {list | populate | download | upload}\n");
+   printf("  -action {list | populate | download | upload | deletekey}\n");
    printf("  -bucket bucketName [-localfile localFilename] [-remotedir keyName]\n");
    printf("  [-localdir localDirName] [-remotekey remoteKeyName]\n");
 }
