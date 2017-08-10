@@ -9,6 +9,7 @@
 #include <aws/core/auth/AWSCredentialsProvider.h>
 #include <aws/s3/S3Client.h>
 #include <aws/s3/model/Bucket.h>
+#include <aws/s3/model/CopyObjectRequest.h>
 #include <aws/s3/model/DeleteObjectRequest.h>
 #include <aws/s3/model/GetObjectRequest.h>
 #include <aws/s3/model/ListObjectsV2Request.h>
@@ -28,6 +29,7 @@ public:
    string remote_key;
 	string localfile_name;
    string localdir_name;
+   int count = 0;
 };
 
 class S3Test {
@@ -160,41 +162,44 @@ protected:
 	}
 
 	void populateBucket(TestArgs testArgs) {
-		cout << "Uploading to bucket " << testArgs.bucket_name << endl;
-		//const char *fileNames[] =
-		//{ "myfile1.txt"
-		//	, "dir1/subfile1.txt"
-		//	, "dir1/subfilesecond.txt"
-		//	, NULL };
+      if(testArgs.remote_key.length() == 0 || testArgs.count == 0 || testArgs.localfile_name.length() == 0) {
+         cerr << "You must specify: " << endl;
+         cerr << "  -remotekey to give the filename prefix" << endl;
+         cerr << "  -count for # of copies to upload" << endl;
+         cerr << "  -localfile for the file to upload" << endl;
+      } else {
+         cout << "Uploading to bucket " << testArgs.bucket_name << endl;
 
-		std::vector<string> fileNames;
-		for (int ifile = 0; ifile < 1200; ifile++) {
-			char szbuf[20];
-			_itoa_s(ifile, szbuf, 10);
-			string filename = "manyfiles/mybigfile";
-			filename += szbuf;
-			fileNames.push_back(filename);
-		}
+         std::vector<string> fileNames;
+         for(int ifile = 0; ifile < testArgs.count; ifile++) {
+            char szbuf[20];
+            _itoa_s(ifile+1, szbuf, 10);
+            string filename = testArgs.remote_key;
+            filename += szbuf;
+            filename += ".bin";
+            fileNames.push_back(filename);
+         }
 
-		for (size_t ifile = 0; ifile < fileNames.size(); ifile++) {
-			Aws::S3::Model::PutObjectRequest object_request;
-			object_request.WithBucket(testArgs.bucket_name);
-			string key = fileNames[ifile];
-			cout << "  Uploading " << testArgs.localfile_name << " as " << key << ". ";
-			object_request.WithKey(key);
-			int mode = std::ios_base::binary | std::ios_base::in;
-			auto input_data = Aws::MakeShared<Aws::FStream>("PutObjectInputStream",
-				testArgs.localfile_name.c_str(), mode);
-			object_request.SetBody(input_data);
-			auto outcome = s3_client->PutObject(object_request);
-			if (outcome.IsSuccess()) {
-				std::cout << "Done!" << std::endl;
-			} else {
-				std::cout << endl << "PutObject error: " <<
-					outcome.GetError().GetExceptionName() << " " <<
-					outcome.GetError().GetMessage() << std::endl;
-			}
-		}
+         for(size_t ifile = 0; ifile < fileNames.size(); ifile++) {
+            Aws::S3::Model::PutObjectRequest object_request;
+            object_request.WithBucket(testArgs.bucket_name);
+            string key = fileNames[ifile];
+            cout << "  Uploading " << testArgs.localfile_name << " as " << key << ". ";
+            object_request.WithKey(key);
+            int mode = std::ios_base::binary | std::ios_base::in;
+            auto input_data = Aws::MakeShared<Aws::FStream>("PutObjectInputStream",
+               testArgs.localfile_name.c_str(), mode);
+            object_request.SetBody(input_data);
+            auto outcome = s3_client->PutObject(object_request);
+            if(outcome.IsSuccess()) {
+               std::cout << "Done!" << std::endl;
+            } else {
+               std::cout << endl << "PutObject error: " <<
+                  outcome.GetError().GetExceptionName() << " " <<
+                  outcome.GetError().GetMessage() << std::endl;
+            }
+         }
+      }
 	}
 
    void upload(TestArgs testArgs) {
@@ -246,6 +251,7 @@ protected:
       }
    }
 
+
 public:
 	void dotest(TestArgs testArgs) {
 		startup();
@@ -274,7 +280,8 @@ void usage()
    printf("Usage: s3vc2017 -accesskey accessKey -secret AWSsecret\n");
    printf("  -action {list | populate | download | upload | deletekey}\n");
    printf("  -bucket bucketName [-localfile localFilename] [-remotedir keyName]\n");
-   printf("  [-localdir localDirName] [-remotekey remoteKeyName]\n");
+   printf("  [-localdir localDirName] [-remotekey remoteKeyName] [-count count]\n");
+   printf("  [-newname newname]\n");
 }
 
 int main(int argc, const char *argv[])
@@ -308,7 +315,10 @@ int main(int argc, const char *argv[])
       } else if(0==strcmp("-remotekey", argv[iarg])) {
          iarg++;
          testArgs.remote_key = argv[iarg];
-		} else {
+      } else if(0==strcmp("-count", argv[iarg])) {
+         iarg++;
+         testArgs.count = atoi(argv[iarg]);
+      } else {
          cout << "Unrecognized argument: " << argv[iarg] << endl;
 			usage();
 			return 1;
